@@ -5,6 +5,7 @@ import (
 
     "gorm.io/driver/mysql"
     "gorm.io/gorm"
+	"minipay/models"
 )
 
 var DB *gorm.DB
@@ -15,6 +16,8 @@ func ConnectDB() {
     if err != nil {
         log.Fatal("Failed to connect to database:", err)
     }
+
+    db.AutoMigrate(&models.User{})
 
     DB = db
     log.Println("Database connected successfully")
