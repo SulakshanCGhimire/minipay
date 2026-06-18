@@ -29,6 +29,8 @@ func main() {
             c.JSON(200, gin.H{"user_id": userID})
         })
         protected.POST("/wallet/create", handlers.CreateWallet)
+        protected.POST("/wallet/deposit", handlers.Deposit)
+        protected.GET("/wallet", handlers.GetWallet)
     }
 
     r.Run(":8080")
