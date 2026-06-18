@@ -31,6 +31,7 @@ func main() {
         protected.POST("/wallet/create", handlers.CreateWallet)
         protected.POST("/wallet/deposit", handlers.Deposit)
         protected.GET("/wallet", handlers.GetWallet)
+        protected.POST("/transfer", handlers.Transfer)
     }
 
     r.Run(":8080")
