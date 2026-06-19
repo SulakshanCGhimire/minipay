@@ -28,6 +28,17 @@ func main() {
 
     r := gin.Default()
 
+    r.Use(func(c *gin.Context) {
+        c.Header("Access-Control-Allow-Origin", "*")
+        c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        c.Header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        if c.Request.Method == "OPTIONS" {
+            c.AbortWithStatus(204)
+            return
+        }
+        c.Next()
+    })
+
     r.GET("/ping", func(c *gin.Context) {
         c.JSON(200, gin.H{"message": "pong"})
     })
@@ -49,5 +60,7 @@ func main() {
         protected.GET("/transactions", transactionHandler.GetTransactions)
     }
 
+    r.Static("/ui", "./ui")
+    
     r.Run(":8080")
 }
