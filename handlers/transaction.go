@@ -83,3 +83,23 @@ func Transfer(c *gin.Context) {
         "balance": senderWallet.Balance,
     })
 }
+
+func GetTransactions(c *gin.Context) {
+    userID, _ := c.Get("user_id")
+
+    var wallet models.Wallet
+    if err := config.DB.Where("user_id = ?", userID).First(&wallet).Error; err != nil {
+        c.JSON(http.StatusNotFound, gin.H{"error": "Wallet not found"})
+        return
+    }
+
+    var transactions []models.Transaction
+    config.DB.Where(
+        "sender_wallet_id = ? OR receiver_wallet_id = ?",
+        wallet.ID, wallet.ID,
+    ).Order("created_at desc").Find(&transactions)
+
+    c.JSON(http.StatusOK, gin.H{
+        "transactions": transactions,
+    })
+}
