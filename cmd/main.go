@@ -4,6 +4,8 @@ import (
     "minipay/config"
     "minipay/handlers"
     "minipay/middleware"
+    "minipay/repositories"
+    "minipay/services"
 
     "github.com/gin-gonic/gin"
 )
@@ -11,6 +13,18 @@ import (
 func main() {
     config.LoadEnv()
     config.ConnectDB()
+
+    // Repositories
+    walletRepo := repositories.NewWalletRepository(config.DB)
+    transactionRepo := repositories.NewTransactionRepository(config.DB)
+
+    // Services
+    walletService := services.NewWalletService(walletRepo)
+    transactionService := services.NewTransactionService(walletRepo, transactionRepo)
+
+    // Handlers
+    walletHandler := handlers.NewWalletHandler(walletService)
+    transactionHandler := handlers.NewTransactionHandler(transactionService)
 
     r := gin.Default()
 
@@ -28,11 +42,11 @@ func main() {
             userID, _ := c.Get("user_id")
             c.JSON(200, gin.H{"user_id": userID})
         })
-        protected.POST("/wallet/create", handlers.CreateWallet)
-        protected.POST("/wallet/deposit", handlers.Deposit)
-        protected.GET("/wallet", handlers.GetWallet)
-        protected.POST("/transfer", handlers.Transfer)
-        protected.GET("/transactions", handlers.GetTransactions)
+        protected.POST("/wallet/create", walletHandler.CreateWallet)
+        protected.GET("/wallet", walletHandler.GetWallet)
+        protected.POST("/wallet/deposit", walletHandler.Deposit)
+        protected.POST("/transfer", transactionHandler.Transfer)
+        protected.GET("/transactions", transactionHandler.GetTransactions)
     }
 
     r.Run(":8080")

@@ -1,15 +1,21 @@
 package handlers
 
 import (
-    "minipay/config"
-    "minipay/models"
+    "minipay/services"
     "net/http"
 
     "github.com/gin-gonic/gin"
-    "gorm.io/gorm"
 )
 
-func Transfer(c *gin.Context) {
+type TransactionHandler struct {
+    TransactionService *services.TransactionService
+}
+
+func NewTransactionHandler(transactionService *services.TransactionService) *TransactionHandler {
+    return &TransactionHandler{TransactionService: transactionService}
+}
+
+func (h *TransactionHandler) Transfer(c *gin.Context) {
     userID, _ := c.Get("user_id")
 
     var input struct {
@@ -22,84 +28,23 @@ func Transfer(c *gin.Context) {
         return
     }
 
-    if input.Amount <= 0 {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Amount must be greater than zero"})
-        return
-    }
-
-    // Get sender wallet
-    var senderWallet models.Wallet
-    if err := config.DB.Where("user_id = ?", userID).First(&senderWallet).Error; err != nil {
-        c.JSON(http.StatusNotFound, gin.H{"error": "Sender wallet not found"})
-        return
-    }
-
-    // Check balance
-    if senderWallet.Balance < input.Amount {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Insufficient balance"})
-        return
-    }
-
-    // Get receiver wallet
-    var receiverWallet models.Wallet
-    if err := config.DB.First(&receiverWallet, input.ReceiverWalletID).Error; err != nil {
-        c.JSON(http.StatusNotFound, gin.H{"error": "Receiver wallet not found"})
-        return
-    }
-
-    // Prevent self-transfer
-    if senderWallet.ID == receiverWallet.ID {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot transfer to your own wallet"})
-        return
-    }
-
-    // DB transaction — atomic
-    err := config.DB.Transaction(func(tx *gorm.DB) error {
-        senderWallet.Balance -= input.Amount
-        if err := tx.Save(&senderWallet).Error; err != nil {
-            return err
-        }
-
-        receiverWallet.Balance += input.Amount
-        if err := tx.Save(&receiverWallet).Error; err != nil {
-            return err
-        }
-
-        transaction := models.Transaction{
-            SenderWalletID:   senderWallet.ID,
-            ReceiverWalletID: receiverWallet.ID,
-            Amount:           input.Amount,
-        }
-        return tx.Create(&transaction).Error
-    })
-
+    err := h.TransactionService.Transfer(userID.(uint), input.ReceiverWalletID, input.Amount)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Transfer failed"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{
-        "message": "Transfer successful",
-        "balance": senderWallet.Balance,
-    })
+    c.JSON(http.StatusOK, gin.H{"message": "Transfer successful"})
 }
 
-func GetTransactions(c *gin.Context) {
+func (h *TransactionHandler) GetTransactions(c *gin.Context) {
     userID, _ := c.Get("user_id")
 
-    var wallet models.Wallet
-    if err := config.DB.Where("user_id = ?", userID).First(&wallet).Error; err != nil {
-        c.JSON(http.StatusNotFound, gin.H{"error": "Wallet not found"})
+    transactions, err := h.TransactionService.GetTransactions(userID.(uint))
+    if err != nil {
+        c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
         return
     }
 
-    var transactions []models.Transaction
-    config.DB.Where(
-        "sender_wallet_id = ? OR receiver_wallet_id = ?",
-        wallet.ID, wallet.ID,
-    ).Order("created_at desc").Find(&transactions)
-
-    c.JSON(http.StatusOK, gin.H{
-        "transactions": transactions,
-    })
+    c.JSON(http.StatusOK, gin.H{"transactions": transactions})
 }

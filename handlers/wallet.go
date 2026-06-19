@@ -1,29 +1,26 @@
 package handlers
 
 import (
-    "minipay/config"
-    "minipay/models"
+    "minipay/services"
     "net/http"
 
     "github.com/gin-gonic/gin"
 )
 
-func CreateWallet(c *gin.Context) {
+type WalletHandler struct {
+    WalletService *services.WalletService
+}
+
+func NewWalletHandler(walletService *services.WalletService) *WalletHandler {
+    return &WalletHandler{WalletService: walletService}
+}
+
+func (h *WalletHandler) CreateWallet(c *gin.Context) {
     userID, _ := c.Get("user_id")
 
-    var existing models.Wallet
-    if err := config.DB.Where("user_id = ?", userID).First(&existing).Error; err == nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Wallet already exists"})
-        return
-    }
-
-    wallet := models.Wallet{
-        UserID:  userID.(uint),
-        Balance: 0,
-    }
-
-    if err := config.DB.Create(&wallet).Error; err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create wallet"})
+    wallet, err := h.WalletService.CreateWallet(userID.(uint))
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
         return
     }
 
@@ -33,7 +30,22 @@ func CreateWallet(c *gin.Context) {
     })
 }
 
-func Deposit(c *gin.Context) {
+func (h *WalletHandler) GetWallet(c *gin.Context) {
+    userID, _ := c.Get("user_id")
+
+    wallet, err := h.WalletService.GetWallet(userID.(uint))
+    if err != nil {
+        c.JSON(http.StatusNotFound, gin.H{"error": "Wallet not found"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "balance":    wallet.Balance,
+        "created_at": wallet.CreatedAt,
+    })
+}
+
+func (h *WalletHandler) Deposit(c *gin.Context) {
     userID, _ := c.Get("user_id")
 
     var input struct {
@@ -45,37 +57,14 @@ func Deposit(c *gin.Context) {
         return
     }
 
-    if input.Amount <= 0 {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Amount must be greater than zero"})
+    wallet, err := h.WalletService.Deposit(userID.(uint), input.Amount)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
         return
     }
-
-    var wallet models.Wallet
-    if err := config.DB.Where("user_id = ?", userID).First(&wallet).Error; err != nil {
-        c.JSON(http.StatusNotFound, gin.H{"error": "Wallet not found"})
-        return
-    }
-
-    wallet.Balance += input.Amount
-    config.DB.Save(&wallet)
 
     c.JSON(http.StatusOK, gin.H{
         "message": "Deposit successful",
         "balance": wallet.Balance,
-    })
-}
-
-func GetWallet(c *gin.Context) {
-    userID, _ := c.Get("user_id")
-
-    var wallet models.Wallet
-    if err := config.DB.Where("user_id = ?", userID).First(&wallet).Error; err != nil {
-        c.JSON(http.StatusNotFound, gin.H{"error": "Wallet not found"})
-        return
-    }
-
-    c.JSON(http.StatusOK, gin.H{
-        "balance":    wallet.Balance,
-        "created_at": wallet.CreatedAt,
     })
 }
